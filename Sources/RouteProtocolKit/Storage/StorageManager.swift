@@ -193,14 +193,6 @@ extension Message: FetchableRecord, PersistableRecord {
     }
 }
 
-extension Event: FetchableRecord, PersistableRecord {
-    public static var databaseTableName: String { "events" }
-    
-    public enum Columns: String, ColumnExpression {
-        case id, routeID, type, timestamp, payload, processed
-    }
-}
-
 // MARK: - Session Storage Extensions
 
 extension StorageManager {
