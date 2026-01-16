@@ -3,7 +3,7 @@ import GRDB
 
 /// Storage manager using GRDB (preserving existing patterns)
 public actor StorageManager {
-    private let dbQueue: DatabaseQueue
+    public let dbQueue: DatabaseQueue // ✅ Public for app's type-safe GRDB queries
     private let databasePath: String
     
     // MARK: - Initialization
