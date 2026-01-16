@@ -200,3 +200,79 @@ extension Event: FetchableRecord, PersistableRecord {
         case id, routeID, type, timestamp, payload, processed
     }
 }
+
+// MARK: - Session Storage Extensions
+
+extension StorageManager {
+    /// Store session data for a route
+    /// - Parameters:
+    ///   - routeID: Route identifier
+    ///   - key: Session data key
+    ///   - value: Session data value
+    public func setSessionData(routeID: String, key: String, value: String) throws {
+        try write { db in
+            try db.execute(
+                sql: """
+                INSERT OR REPLACE INTO session_storage (route_id, key, value, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                arguments: [routeID, key, value, Date()]
+            )
+        }
+    }
+    
+    /// Get session data for a route
+    /// - Parameters:
+    ///   - routeID: Route identifier
+    ///   - key: Session data key
+    /// - Returns: Session data value or nil if not found
+    public func getSessionData(routeID: String, key: String) throws -> String? {
+        try read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT value FROM session_storage WHERE route_id = ? AND key = ?",
+                arguments: [routeID, key]
+            )
+        }
+    }
+    
+    /// Delete session data for a route
+    /// - Parameters:
+    ///   - routeID: Route identifier
+    ///   - key: Optional session data key. If nil, deletes all session data for route
+    public func deleteSessionData(routeID: String, key: String? = nil) throws {
+        try write { db in
+            if let key = key {
+                try db.execute(
+                    sql: "DELETE FROM session_storage WHERE route_id = ? AND key = ?",
+                    arguments: [routeID, key]
+                )
+            } else {
+                try db.execute(
+                    sql: "DELETE FROM session_storage WHERE route_id = ?",
+                    arguments: [routeID]
+                )
+            }
+        }
+    }
+    
+    /// Get all session data for a route
+    /// - Parameter routeID: Route identifier
+    /// - Returns: Dictionary of key-value pairs
+    public func getAllSessionData(routeID: String) throws -> [String: String] {
+        try read { db in
+            var data: [String: String] = [:]
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT key, value FROM session_storage WHERE route_id = ?",
+                arguments: [routeID]
+            )
+            for row in rows {
+                let key: String = row["key"]
+                let value: String = row["value"]
+                data[key] = value
+            }
+            return data
+        }
+    }
+}
