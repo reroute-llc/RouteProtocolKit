@@ -150,15 +150,22 @@ public struct Conversation: Codable, Sendable, Identifiable {
 /// Event type
 public enum EventType: String, Codable, Sendable {
     case messageReceived = "MESSAGE_RECEIVED"
+    case messageUpdated = "MESSAGE_UPDATED"
+    case messageDeleted = "MESSAGE_DELETED"
     case reactionAdded = "REACTION_ADDED"
     case reactionRemoved = "REACTION_REMOVED"
     case typingIndicator = "TYPING_INDICATOR"
-    case messageDeleted = "MESSAGE_DELETED"
-    case messageUpdated = "MESSAGE_UPDATED"
+    case typingStarted = "TYPING_STARTED"
+    case typingStopped = "TYPING_STOPPED"
     case callStarted = "CALL_STARTED"
     case callEnded = "CALL_ENDED"
     case conversationCreated = "CONVERSATION_CREATED"
     case conversationUpdated = "CONVERSATION_UPDATED"
+    case conversationDeleted = "CONVERSATION_DELETED"
+    case participantAdded = "PARTICIPANT_ADDED"
+    case participantRemoved = "PARTICIPANT_REMOVED"
+    case presenceChanged = "PRESENCE_CHANGED"
+    case custom = "CUSTOM"
 }
 
 /// Event
@@ -168,19 +175,81 @@ public struct Event: Codable, Sendable, Identifiable {
     public let type: EventType
     public let timestamp: Date
     public let payload: Data
+    public var processed: Bool
     
     public init(
         id: String = UUID().uuidString,
         routeID: String,
         type: EventType,
         timestamp: Date = Date(),
-        payload: Data
+        payload: Data,
+        processed: Bool = false
     ) {
         self.id = id
         self.routeID = routeID
         self.type = type
         self.timestamp = timestamp
         self.payload = payload
+        self.processed = processed
+    }
+}
+
+// MARK: - GRDB Conformance for Event
+
+extension Event: FetchableRecord, PersistableRecord {
+    /// Table name in the database
+    public static let databaseTableName = "events"
+    
+    /// Column coding keys
+    private enum Columns: String, CodingKey, ColumnExpression {
+        case id
+        case routeID
+        case type
+        case timestamp
+        case payload
+        case processed
+    }
+    
+    /// Initialize from database row
+    public init(row: Row) throws {
+        id = row[Columns.id]
+        routeID = row[Columns.routeID]
+        
+        let typeString: String = row[Columns.type]
+        type = EventType(rawValue: typeString) ?? .custom
+        
+        timestamp = row[Columns.timestamp]
+        payload = row[Columns.payload]
+        processed = row[Columns.processed]
+    }
+    
+    /// Encode to database row
+    public func encode(to container: inout PersistenceContainer) throws {
+        container[Columns.id] = id
+        container[Columns.routeID] = routeID
+        container[Columns.type] = type.rawValue
+        container[Columns.timestamp] = timestamp
+        container[Columns.payload] = payload
+        container[Columns.processed] = processed
+    }
+}
+
+// MARK: - Query Helpers for Event
+
+extension Event {
+    /// Filter unprocessed events
+    public static func unprocessed() -> QueryInterfaceRequest<Event> {
+        filter(Column("processed") == false)
+    }
+    
+    /// Filter events by route ID
+    public static func forRoute(_ routeID: String) -> QueryInterfaceRequest<Event> {
+        filter(Column("routeID") == routeID)
+    }
+    
+    /// Filter events by type
+    public static func ofType(_ type: EventType) -> QueryInterfaceRequest<Event> {
+        filter(Column("type") == type.rawValue)
     }
 }
 

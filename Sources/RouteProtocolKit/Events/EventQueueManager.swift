@@ -35,7 +35,7 @@ public actor EventQueueManager {
         inMemoryQueue.append(event)
         
         // Persist to database
-        try await storage.write { db in
+        try storage.write { db in
             var mutableEvent = event
             try mutableEvent.insert(db)
         }
@@ -61,7 +61,7 @@ public actor EventQueueManager {
                 inMemoryQueue.removeAll { $0.id == event.id }
                 
                 // Mark as processed in database
-                try await storage.write { db in
+                try storage.write { db in
                     try db.execute(
                         sql: """
                         UPDATE events
@@ -94,7 +94,7 @@ public actor EventQueueManager {
                 }
                 
                 // Mark as processed in database
-                try await storage.write { db in
+                try storage.write { db in
                     try db.execute(
                         sql: """
                         UPDATE events
@@ -124,7 +124,7 @@ public actor EventQueueManager {
         inMemoryQueue.removeAll { $0.routeID == routeID }
         
         // Delete from database
-        try await storage.write { db in
+        try storage.write { db in
             try db.execute(
                 sql: """
                 DELETE FROM events
@@ -158,8 +158,8 @@ public actor EventQueueManager {
     
     /// Load queued events from database on startup
     public func loadFromDatabase() async throws {
-        let events: [Event] = try await storage.read { db in
-            try Event.filter(Column("processed") == false)
+        let events: [Event] = try storage.read { db in
+            try Event.unprocessed()
                 .order(Column("timestamp"))
                 .fetchAll(db)
         }
@@ -169,8 +169,8 @@ public actor EventQueueManager {
     
     /// Get all unprocessed events from database
     public func getUnprocessedEvents() async throws -> [Event] {
-        try await storage.read { db in
-            try Event.filter(Column("processed") == false)
+        try storage.read { db in
+            try Event.unprocessed()
                 .order(Column("timestamp"))
                 .fetchAll(db)
         }
@@ -180,7 +180,7 @@ public actor EventQueueManager {
     public func cleanupOldEvents(olderThan: TimeInterval) async throws {
         let cutoffDate = Date().addingTimeInterval(-olderThan)
         
-        try await storage.write { db in
+        try storage.write { db in
             try db.execute(
                 sql: """
                 DELETE FROM events
@@ -189,30 +189,5 @@ public actor EventQueueManager {
                 arguments: [cutoffDate]
             )
         }
-    }
-}
-
-// MARK: - Event Codable Extensions
-
-extension Event {
-    /// Insert event into database
-    fileprivate mutating func insert(_ db: GRDB.Database) throws {
-        try db.execute(
-            sql: """
-            INSERT INTO events (id, routeID, type, timestamp, payload, processed)
-            VALUES (?, ?, ?, ?, ?, 0)
-            """,
-            arguments: [id, routeID, type.rawValue, timestamp, payload]
-        )
-    }
-}
-
-// MARK: - GRDB Helpers
-
-import GRDB
-
-private extension Event {
-    static func filter(_ condition: SQLSpecificExpressible) -> QueryInterfaceRequest<Event> {
-        Event.filter(condition)
     }
 }
