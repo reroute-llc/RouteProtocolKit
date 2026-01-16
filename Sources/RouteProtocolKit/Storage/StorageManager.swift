@@ -203,7 +203,8 @@ extension StorageManager {
     ///   - routeID: Route identifier
     ///   - key: Session data key
     ///   - value: Session data value
-    public func setSessionData(routeID: String, key: String, value: String) throws {
+    /// Marked nonisolated because it only calls nonisolated write() method
+    nonisolated public func setSessionData(routeID: String, key: String, value: String) throws {
         try write { db in
             try db.execute(
                 sql: """
@@ -220,7 +221,8 @@ extension StorageManager {
     ///   - routeID: Route identifier
     ///   - key: Session data key
     /// - Returns: Session data value or nil if not found
-    public func getSessionData(routeID: String, key: String) throws -> String? {
+    /// Marked nonisolated because it only calls nonisolated read() method
+    nonisolated public func getSessionData(routeID: String, key: String) throws -> String? {
         try read { db in
             try String.fetchOne(
                 db,
@@ -234,7 +236,8 @@ extension StorageManager {
     /// - Parameters:
     ///   - routeID: Route identifier
     ///   - key: Optional session data key. If nil, deletes all session data for route
-    public func deleteSessionData(routeID: String, key: String? = nil) throws {
+    /// Marked nonisolated because it only calls nonisolated write() method
+    nonisolated public func deleteSessionData(routeID: String, key: String? = nil) throws {
         try write { db in
             if let key = key {
                 try db.execute(
@@ -253,7 +256,8 @@ extension StorageManager {
     /// Get all session data for a route
     /// - Parameter routeID: Route identifier
     /// - Returns: Dictionary of key-value pairs
-    public func getAllSessionData(routeID: String) throws -> [String: String] {
+    /// Marked nonisolated because it only calls nonisolated read() method
+    nonisolated public func getAllSessionData(routeID: String) throws -> [String: String] {
         try read { db in
             var data: [String: String] = [:]
             let rows = try Row.fetchAll(
