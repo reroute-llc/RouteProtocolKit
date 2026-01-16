@@ -34,13 +34,11 @@ public actor EventQueueManager {
         // Add to in-memory queue
         inMemoryQueue.append(event)
         
-        // Persist to database (GRDB is synchronous, wrap in Task for actor isolation)
-        try await Task.detached { [storage] in
-            try storage.write { db in
-                var mutableEvent = event
-                try mutableEvent.insert(db)
-            }
-        }.value
+        // Persist to database
+        try storage.write { db in
+            var mutableEvent = event
+            try mutableEvent.insert(db)
+        }
     }
     
     /// Dequeue and process all events for a route
@@ -98,18 +96,16 @@ public actor EventQueueManager {
                 }
                 
                 // Mark as processed in database
-                try await Task.detached { [storage] in
-                    try storage.write { db in
-                        try db.execute(
-                            sql: """
-                            UPDATE events
-                            SET processed = 1
-                            WHERE id = ?
-                            """,
-                            arguments: [event.id]
-                        )
-                    }
-                }.value
+                try storage.write { db in
+                    try db.execute(
+                        sql: """
+                        UPDATE events
+                        SET processed = 1
+                        WHERE id = ?
+                        """,
+                        arguments: [event.id]
+                    )
+                }
                 
                 processedCount += 1
             } catch {
@@ -130,17 +126,15 @@ public actor EventQueueManager {
         inMemoryQueue.removeAll { $0.routeID == routeID }
         
         // Delete from database
-        try await Task.detached { [storage] in
-            try storage.write { db in
-                try db.execute(
-                    sql: """
-                    DELETE FROM events
-                    WHERE routeID = ?
-                    """,
-                    arguments: [routeID]
-                )
-            }
-        }.value
+        try storage.write { db in
+            try db.execute(
+                sql: """
+                DELETE FROM events
+                WHERE routeID = ?
+                """,
+                arguments: [routeID]
+            )
+        }
     }
     
     /// Get queue size for a route
@@ -166,42 +160,36 @@ public actor EventQueueManager {
     
     /// Load queued events from database on startup
     public func loadFromDatabase() async throws {
-        let events: [Event] = try await Task.detached { [storage] in
-            try storage.read { db in
-                try Event.unprocessed()
-                    .order(Column("timestamp"))
-                    .fetchAll(db)
-            }
-        }.value
+        let events: [Event] = try storage.read { db in
+            try Event.unprocessed()
+                .order(Column("timestamp"))
+                .fetchAll(db)
+        }
         
         inMemoryQueue = events
     }
     
     /// Get all unprocessed events from database
     public func getUnprocessedEvents() async throws -> [Event] {
-        try await Task.detached { [storage] in
-            try storage.read { db in
-                try Event.unprocessed()
-                    .order(Column("timestamp"))
-                    .fetchAll(db)
-            }
-        }.value
+        try storage.read { db in
+            try Event.unprocessed()
+                .order(Column("timestamp"))
+                .fetchAll(db)
+        }
     }
     
     /// Delete old processed events (cleanup)
     public func cleanupOldEvents(olderThan: TimeInterval) async throws {
         let cutoffDate = Date().addingTimeInterval(-olderThan)
         
-        try await Task.detached { [storage] in
-            try storage.write { db in
-                try db.execute(
-                    sql: """
-                    DELETE FROM events
-                    WHERE processed = 1 AND timestamp < ?
-                    """,
-                    arguments: [cutoffDate]
-                )
-            }
-        }.value
+        try storage.write { db in
+            try db.execute(
+                sql: """
+                DELETE FROM events
+                WHERE processed = 1 AND timestamp < ?
+                """,
+                arguments: [cutoffDate]
+            )
+        }
     }
 }

@@ -55,12 +55,14 @@ public actor StorageManager {
     
     /// Read operation (thread-safe via DatabaseQueue)
     /// Note: GRDB's read/write are synchronous but thread-safe via DatabaseQueue
-    public func read<T>(_ block: (Database) throws -> T) throws -> T {
+    /// Marked nonisolated because GRDB handles its own thread-safety
+    nonisolated public func read<T>(_ block: (Database) throws -> T) throws -> T {
         try dbQueue.read(block)
     }
     
     /// Write operation (thread-safe via DatabaseQueue)
-    public func write<T>(_ block: (Database) throws -> T) throws -> T {
+    /// Marked nonisolated because GRDB handles its own thread-safety
+    nonisolated public func write<T>(_ block: (Database) throws -> T) throws -> T {
         try dbQueue.write(block)
     }
     
