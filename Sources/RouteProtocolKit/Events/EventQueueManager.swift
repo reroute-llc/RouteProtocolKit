@@ -34,11 +34,13 @@ public actor EventQueueManager {
         // Add to in-memory queue
         inMemoryQueue.append(event)
         
-        // Persist to database
-        try storage.write { db in
-            var mutableEvent = event
-            try mutableEvent.insert(db)
-        }
+        // Persist to database (GRDB is synchronous, wrap in Task for actor isolation)
+        try await Task.detached { [storage] in
+            try storage.write { db in
+                var mutableEvent = event
+                try mutableEvent.insert(db)
+            }
+        }.value
     }
     
     /// Dequeue and process all events for a route
@@ -61,16 +63,18 @@ public actor EventQueueManager {
                 inMemoryQueue.removeAll { $0.id == event.id }
                 
                 // Mark as processed in database
-                try storage.write { db in
-                    try db.execute(
-                        sql: """
-                        UPDATE events
-                        SET processed = 1
-                        WHERE id = ?
-                        """,
-                        arguments: [event.id]
-                    )
-                }
+                try await Task.detached { [storage] in
+                    try storage.write { db in
+                        try db.execute(
+                            sql: """
+                            UPDATE events
+                            SET processed = 1
+                            WHERE id = ?
+                            """,
+                            arguments: [event.id]
+                        )
+                    }
+                }.value
                 
                 processedCount += 1
             } catch {
@@ -94,16 +98,18 @@ public actor EventQueueManager {
                 }
                 
                 // Mark as processed in database
-                try storage.write { db in
-                    try db.execute(
-                        sql: """
-                        UPDATE events
-                        SET processed = 1
-                        WHERE id = ?
-                        """,
-                        arguments: [event.id]
-                    )
-                }
+                try await Task.detached { [storage] in
+                    try storage.write { db in
+                        try db.execute(
+                            sql: """
+                            UPDATE events
+                            SET processed = 1
+                            WHERE id = ?
+                            """,
+                            arguments: [event.id]
+                        )
+                    }
+                }.value
                 
                 processedCount += 1
             } catch {
@@ -124,15 +130,17 @@ public actor EventQueueManager {
         inMemoryQueue.removeAll { $0.routeID == routeID }
         
         // Delete from database
-        try storage.write { db in
-            try db.execute(
-                sql: """
-                DELETE FROM events
-                WHERE routeID = ?
-                """,
-                arguments: [routeID]
-            )
-        }
+        try await Task.detached { [storage] in
+            try storage.write { db in
+                try db.execute(
+                    sql: """
+                    DELETE FROM events
+                    WHERE routeID = ?
+                    """,
+                    arguments: [routeID]
+                )
+            }
+        }.value
     }
     
     /// Get queue size for a route
@@ -158,36 +166,42 @@ public actor EventQueueManager {
     
     /// Load queued events from database on startup
     public func loadFromDatabase() async throws {
-        let events: [Event] = try storage.read { db in
-            try Event.unprocessed()
-                .order(Column("timestamp"))
-                .fetchAll(db)
-        }
+        let events: [Event] = try await Task.detached { [storage] in
+            try storage.read { db in
+                try Event.unprocessed()
+                    .order(Column("timestamp"))
+                    .fetchAll(db)
+            }
+        }.value
         
         inMemoryQueue = events
     }
     
     /// Get all unprocessed events from database
     public func getUnprocessedEvents() async throws -> [Event] {
-        try storage.read { db in
-            try Event.unprocessed()
-                .order(Column("timestamp"))
-                .fetchAll(db)
-        }
+        try await Task.detached { [storage] in
+            try storage.read { db in
+                try Event.unprocessed()
+                    .order(Column("timestamp"))
+                    .fetchAll(db)
+            }
+        }.value
     }
     
     /// Delete old processed events (cleanup)
     public func cleanupOldEvents(olderThan: TimeInterval) async throws {
         let cutoffDate = Date().addingTimeInterval(-olderThan)
         
-        try storage.write { db in
-            try db.execute(
-                sql: """
-                DELETE FROM events
-                WHERE processed = 1 AND timestamp < ?
-                """,
-                arguments: [cutoffDate]
-            )
-        }
+        try await Task.detached { [storage] in
+            try storage.write { db in
+                try db.execute(
+                    sql: """
+                    DELETE FROM events
+                    WHERE processed = 1 AND timestamp < ?
+                    """,
+                    arguments: [cutoffDate]
+                )
+            }
+        }.value
     }
 }
