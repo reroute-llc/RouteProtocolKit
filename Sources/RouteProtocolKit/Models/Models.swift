@@ -201,7 +201,7 @@ extension Event: FetchableRecord, PersistableRecord {
     public static let databaseTableName = "events"
     
     /// Column coding keys
-    private enum Columns: String, CodingKey, ColumnExpression {
+    public enum Columns: String, CodingKey, ColumnExpression {
         case id
         case routeID
         case type
